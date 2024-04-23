@@ -1,0 +1,113 @@
+#include <LiquidCrystal.h>
+LiquidCrystal lcd(13, 12, 14, 27, 26, 25);
+#define BLYNK_PRINT Serial
+#include "EmonLib.h"
+#include <WiFi.h>
+#include <WiFiClient.h>
+#include <BlynkSimpleEsp32.h>
+
+const int numDevices = 2; // Number of devices to monitor
+
+EnergyMonitor emon[numDevices];
+
+#define vCalibration1 83.3
+#define currCalibration1 0.50
+
+#define vCalibration2 90.0 // Adjust these calibration values for the second device
+#define currCalibration2 0.48 // Adjust these calibration values for the second device
+
+BlynkTimer timer;
+
+char auth[] = "hsYG_5da4gdP9jZkL18O5RNcJSrBT-Ou";
+char ssid[] = "Alexahome";
+char pass[] = "loranthus";
+
+float kWh[numDevices] = {0};
+unsigned long lastmillis[numDevices];
+
+void myTimerEvent()
+{
+  for (int i = 0; i < numDevices; i++)
+  {
+    emon[i].calcVI(20, 2000);
+    kWh[i] = kWh[i] + emon[i].apparentPower * (millis() - lastmillis[i]) / 3600000000.0;
+    yield();
+    Serial.print("Device ");
+    Serial.print(i + 1);
+
+    Serial.print(" - Vrms: ");
+    Serial.print(emon[i].Vrms, 2);
+    Serial.print("V");
+
+    Serial.print("\tIrms: ");
+    Serial.print(emon[i].Irms, 4);
+    Serial.print("A");
+
+    Serial.print("\tPower: ");
+    Serial.print(emon[i].apparentPower, 4);
+    Serial.print("W");
+
+    Serial.print("\tkWh: ");
+    Serial.print(kWh[i], 5);
+    Serial.println("kWh");
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Vrms:");
+    lcd.print(emon[i].Vrms, 2);
+    lcd.print("V");
+    lcd.setCursor(0, 1);
+    lcd.print("Irms:");
+    lcd.print(emon[i].Irms, 4);
+    lcd.print("A");
+    delay(2500);
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Power:");
+    lcd.print(emon[i].apparentPower, 4);
+    lcd.print("W");
+    lcd.setCursor(0, 1);
+    lcd.print("kWh:");
+    lcd.print(kWh[i], 4);
+    lcd.print("W");
+    delay(2500);
+
+    lastmillis[i] = millis();
+
+    Blynk.virtualWrite(V0 + (i * 4), emon[i].Vrms);
+    Blynk.virtualWrite(V1 + (i * 4), emon[i].Irms);
+    Blynk.virtualWrite(V2 + (i * 4), emon[i].apparentPower);
+    Blynk.virtualWrite(V3 + (i * 4), kWh[i]);
+  }
+}
+
+void setup()
+{
+  Serial.begin(9600);
+  Blynk.begin(auth, ssid, pass);
+  lcd.begin(16, 2);
+
+  for (int i = 0; i < numDevices; i++)
+  {
+    emon[i].voltage(35 + i, (i == 0 ? vCalibration1 : vCalibration2), 1.7);
+    emon[i].current(34 + i, (i == 0 ? currCalibration1 : currCalibration2));
+    lastmillis[i] = millis();
+  }
+
+  timer.setInterval(5000L, myTimerEvent);
+  lcd.setCursor(3, 0);
+  lcd.print("IoT Energy");
+  lcd.setCursor(5, 1);
+  lcd.print("Meter");
+  delay(3000);
+  lcd.clear();
+}
+
+void loop()
+{
+  Blynk.run();
+  timer.run();
+}
+
+

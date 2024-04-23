@@ -1,0 +1,78 @@
+#include <Simpletimer.h>
+#include <EEPROM.h>
+#include <EmonLib.h>
+#include "thingProperties.h"
+Simpletimer timer;
+EnergyMonitor emon;
+#define vCalibration 83.3
+#define currCalibration 0.50
+
+float kWh = 0;
+unsigned long lastmillis = millis();
+
+void myTimerEvent()
+{
+  emon.calcVI(20, 2000);
+  yield();
+  Serial.print("Vrms: ");
+  Serial.print(emon.Vrms, 2);
+  Serial.print("V");
+  EEPROM.put(0, emon.Vrms);
+  delay(100);
+ 
+  Serial.print("\tIrms: ");
+  Serial.print(emon.Irms, 4);
+  Serial.print("A");
+  EEPROM.put(4, emon.Irms);
+  delay(100);
+ 
+  Serial.print("\tPower: ");
+  Serial.print(emon.apparentPower, 4);
+  Serial.print("W");
+
+  
+  EEPROM.put(8, emon.apparentPower);
+  delay(100);
+}
+
+void setup() {
+  initProperties();
+
+  // Connect to Arduino IoT Cloud
+  ArduinoCloud.begin(ArduinoIoTPreferredConnection);
+
+  Serial.begin(115200);
+  delay(1500);
+
+  emon.voltage(35, vCalibration, 1.7); // Voltage: input pin, calibration, phase_shift
+  emon.current(34, currCalibration);   // Current: input pin, calibration.
+
+  setDebugMessageLevel(2);
+  ArduinoCloud.printDebugInfo();
+}
+
+void onCurrentChange()  {
+  float current = emon.Irms;
+  Serial.print("Current changed to ");
+  Serial.println(current);
+}
+
+void onVoltageChange()  {
+  float voltage = emon.Vrms;
+  Serial.print("Voltage changed to ");
+  Serial.println(voltage);
+
+}
+
+void onPowerChange()  {
+  float power = emon.apparentPower;
+  Serial.print("Power changed to ");
+  Serial.println(power);
+}
+
+void loop() {
+  ArduinoCloud.update();
+  timer.run();
+
+}
+
